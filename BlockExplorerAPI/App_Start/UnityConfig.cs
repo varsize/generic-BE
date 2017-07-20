@@ -1,101 +1,65 @@
 using System;
 using System.Collections.Generic;
 using System.Configuration;
-using System.IO;
 using System.Reflection;
-using System.Runtime.Serialization.Formatters.Binary;
 using Microsoft.AspNet.SignalR;
 using Microsoft.AspNet.SignalR.Infrastructure;
 using Microsoft.Practices.Unity;
-using System.Web.Http;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using BlockExplorerAPI.DAL;
 using BlockExplorerAPI.DAL.Abstract;
 using BlockExplorerAPI.Hubs;
 using BlockExplorerAPI.Services;
 using BlockExplorerAPI.Services.Abstract;
-using Unity.WebApi;
 
 namespace BlockExplorerAPI
 {
     public static class UnityConfig
     {
-        public static void RegisterComponents()
+        public static IUnityContainer Configure()
         {
 			var container = new UnityContainer();
 
             container.RegisterType<CryptoRpcClient>(new InjectionFactory(c => 
                 new CryptoRpcClient(ApplicationSettings.RpcUser, 
-                                        ApplicationSettings.RpcPassword, 
-                                        ApplicationSettings.RpcHost, 
-                                        ApplicationSettings.RpcPort
-                                        )));
+                        ApplicationSettings.RpcPassword, 
+                        ApplicationSettings.RpcHost, 
+                        ApplicationSettings.RpcPort
+                    )));
             
             container.RegisterType<InMemoryTransactionRepository>("mempooltx", new ContainerControlledLifetimeManager());
             container.RegisterType<ISimpleTransactionRepository, DatabaseTransactionRepository>(new HierarchicalLifetimeManager(),
                 new InjectionConstructor(ConfigurationManager.ConnectionStrings["default"].ToString()));
-            /*container.RegisterType<InMemoryTransactionRepository>("blocktx", new ContainerControlledLifetimeManager(), new InjectionFactory(
-                c =>
-                {
-                    if (File.Exists(ApplicationSettings.TxIndexFilePath))
-                    {
-                        var formatter = new BinaryFormatter();
-                        var stream = new FileStream(ApplicationSettings.TxIndexFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                        try
-                        {
-                            var obj = formatter.Deserialize(stream);
-                            return obj as InMemoryTransactionRepository;
-                        }
-                        catch (Exception)
-                        {
-                            return new InMemoryTransactionRepository();
-                        }
-                        finally
-                        {
-                            stream.Close();
-                        }
-                    }
-                    return new InMemoryTransactionRepository();
-                }));
-            container.RegisterType<ISimpleTransactionRepository, InMemoryTransactionRepository>(
-                new InjectionFactory(c => c.Resolve<InMemoryTransactionRepository>("blocktx")));*/
+
             container.RegisterType<ITransactionRepository, TwoLevelTransactionRepository>(
                 new InjectionFactory(c => new TwoLevelTransactionRepository(
                         c.Resolve<InMemoryTransactionRepository>("mempooltx"), c.Resolve<ISimpleTransactionRepository>()
-                        //c.Resolve<InMemoryTransactionRepository>("blocktx")
                     )));
 
             container.RegisterType<TransactionService>(new InjectionFactory(c => 
                 new TransactionService(
                     new TwoLevelTransactionRepository(c.Resolve<InMemoryTransactionRepository>("mempooltx"), c.Resolve<ISimpleTransactionRepository>()), 
-                    c.Resolve<CryptoRpcClient>(), 
-                    c.Resolve<AddressService>(),
-                    c.Resolve<IMessageDeliveryService>())));
+                        c.Resolve<CryptoRpcClient>(), 
+                        c.Resolve<AddressService>(),
+                        c.Resolve<IMessageDeliveryService>()
+                    )));
 
             container.RegisterType<TxMemPoolChecker>(new InjectionFactory(c => 
                 new TxMemPoolChecker(
-                    c.Resolve<CryptoRpcClient>(), 
-                    c.Resolve<TransactionService>())));
+                        c.Resolve<CryptoRpcClient>(), 
+                        c.Resolve<TransactionService>()
+                    )));
+
             container.RegisterType<AddressService>();
-            container.RegisterType<BlockService>(new ContainerControlledLifetimeManager(), new InjectionFactory(c => 
-                new BlockService(
-                    () => c.Resolve<CryptoRpcClient>(), 
-                    c.Resolve<TransactionService>(),
-                    c.Resolve<IMessageDeliveryService>())));
-
-            container.RegisterType<IMessageDeliveryService, SignalRNotificationService>(
-                new InjectionFactory(c => new SignalRNotificationService(GlobalHost.ConnectionManager.GetHubContext<NotificationHub>())));
+            container.RegisterType<BlockService>(new ContainerControlledLifetimeManager(), 
+                new InjectionFactory(c => 
+                    new BlockService(
+                            () => c.Resolve<CryptoRpcClient>(), 
+                            c.Resolve<TransactionService>(),
+                            c.Resolve<IMessageDeliveryService>()
+                        )));
             
-            GlobalConfiguration.Configuration.DependencyResolver = new UnityDependencyResolver(container);
-
-            GlobalHost.DependencyResolver = new SignalRUnityDependencyResolver(container);
-            GlobalHost.DependencyResolver.Register(typeof(JsonSerializer), () =>
-                JsonSerializer.Create(new JsonSerializerSettings()
-                {
-                    ContractResolver = new SignalRContractResolver(),
-                    Formatting = Formatting.Indented, 
-                }));
+            return container;
         }
 
         public class SignalRUnityDependencyResolver : DefaultDependencyResolver
@@ -123,16 +87,16 @@ namespace BlockExplorerAPI
             }
         }
 
-        public class SignalRContractResolver : IContractResolver
+        public class SignalRJsonContractResolver : IContractResolver
         {
             private readonly Assembly assembly;
-            private readonly IContractResolver camelCaseContractResolver;
+            private readonly IContractResolver customContractResolver;
             private readonly IContractResolver defaultContractSerializer;
 
-            public SignalRContractResolver()
+            public SignalRJsonContractResolver(IContractResolver customContractResolver)
             {
                 defaultContractSerializer = new DefaultContractResolver();
-                camelCaseContractResolver = new CamelCasePropertyNamesContractResolver();
+                this.customContractResolver = customContractResolver;
                 assembly = typeof(Connection).Assembly;
             }
 
@@ -140,7 +104,7 @@ namespace BlockExplorerAPI
             {
                 if (type.Assembly.Equals(assembly))
                     return defaultContractSerializer.ResolveContract(type);
-                return camelCaseContractResolver.ResolveContract(type);
+                return customContractResolver.ResolveContract(type);
             }
         }
     }

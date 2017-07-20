@@ -8,7 +8,7 @@ namespace BlockExplorerAPI
 {
     public static class WebApiConfig
     {
-        public static void Register(HttpConfiguration config)
+        public static void Configure(HttpConfiguration config)
         {
             // Web API configuration and services
             config.Services.Replace(typeof(IExceptionHandler), new ExceptionLoggingHandler());
