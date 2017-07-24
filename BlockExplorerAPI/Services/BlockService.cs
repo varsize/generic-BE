@@ -22,7 +22,7 @@ namespace BlockExplorerAPI.Services
 
         public int LastScannedBlockNumber { get; private set; }
         private object lockObj = new object();
-        private int MinConfirmations = 12;
+        
         public BlockService(Func<CryptoRpcClient> rpcClientFactory, TransactionService transactionService, IMessageDeliveryService messageDeliveryService)
         {
             if (rpcClientFactory == null)
@@ -66,9 +66,7 @@ namespace BlockExplorerAPI.Services
                     }
 
                     Logger.Debug("LastScannedBlockNumber: {0}", LastScannedBlockNumber);
-                    int lastConfirmedBlockNumber = blockHeight - MinConfirmations;
-                    Logger.Debug("lastConfirmedBlockNumber: {0}", lastConfirmedBlockNumber);
-                    ScanBlockchainNoLock(lastConfirmedBlockNumber, blockHeight - 1);
+                    ScanBlockchainNoLock(toBlockNumber: blockHeight - 1);
                     SaveBlockTransactions(block, true);
                     transactionService.MemPool.Clear();
                 }
