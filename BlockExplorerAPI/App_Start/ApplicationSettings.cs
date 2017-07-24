@@ -1,6 +1,5 @@
 ﻿using System.Configuration;
 using System.Globalization;
-using System.Web;
 
 namespace BlockExplorerAPI
 {
@@ -35,11 +34,6 @@ namespace BlockExplorerAPI
         public static int MaxLastTransactionsCount
         {
             get { return int.Parse(ConfigurationManager.AppSettings["MaxLastTransactionsCount"]); }
-        }
-
-        public static string TxIndexFilePath
-        {
-            get { return HttpContext.Current.Server.MapPath("~/App_Data/tx-index.bin"); }
         }
     }
 }
